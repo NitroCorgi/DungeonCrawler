@@ -1,0 +1,11 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "npm init": true,
+        "npm pkg": true,
+        "npm install": true,
+        "/^node --check game\\.js$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

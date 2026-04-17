@@ -1,0 +1,4 @@
+# List room type files here, one per line.
+rooms/skirmish.txt
+rooms/swarm.txt
+rooms/tanks.txt
