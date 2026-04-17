@@ -14,7 +14,7 @@ const ROOM_TYPE_MANIFEST = "rooms/manifest.txt";
 const GRID_COLS = 24;
 const GRID_ROWS = 16;
 const TILE_SIZE = WIDTH / GRID_COLS;
-const ROOM_CHARS = new Set(["X", "D", "*", "E"]);
+const ROOM_CHARS = new Set(["X", "D", "*", "E", "G"]);
 
 const DEFAULT_ROOM_TYPES = [
   {
@@ -438,6 +438,40 @@ function collectEnemySpawnPoints(room) {
   return points;
 }
 
+function getGoalMarkerPosition(room) {
+  const layout = getRoomLayout(room);
+  const markers = [];
+
+  for (let row = 0; row < GRID_ROWS; row += 1) {
+    for (let col = 0; col < GRID_COLS; col += 1) {
+      if (layout[row][col] !== "G") {
+        continue;
+      }
+
+      markers.push({
+        x: col * TILE_SIZE + TILE_SIZE / 2,
+        y: row * TILE_SIZE + TILE_SIZE / 2,
+      });
+    }
+  }
+
+  if (markers.length > 0) {
+    return markers[randomInt(0, markers.length - 1)];
+  }
+
+  return { x: WIDTH / 2, y: HEIGHT / 2 };
+}
+
+function getGoalRect(room) {
+  const goal = room.goalPosition || getGoalMarkerPosition(room);
+  const size = Math.floor(TILE_SIZE * 0.75);
+  return {
+    x: goal.x - size / 2,
+    y: goal.y - size / 2,
+    size,
+  };
+}
+
 function ensureRequiredDoors(room) {
   const layoutRows = getRoomLayout(room).map((line) => line.split(""));
   const midCol = Math.floor(GRID_COLS / 2);
@@ -543,6 +577,7 @@ function generateDungeon(roomCountTarget) {
       room.layout = clearSpawnMarkers(room.layout);
     }
     ensureRequiredDoors(room);
+    room.goalPosition = getGoalMarkerPosition(room);
 
     if (room.id === startRoom.id) {
       continue;
@@ -831,13 +866,17 @@ function reachedGoal() {
     return false;
   }
 
-  const size = 38;
-  const gx = WIDTH / 2 - size / 2;
-  const gy = HEIGHT / 2 - size / 2;
+  const room = roomById.get(currentRoomId);
+  const goalRect = getGoalRect(room);
   const px = player.x;
   const py = player.y;
 
-  return px >= gx && px <= gx + size && py >= gy && py <= gy + size;
+  return (
+    px >= goalRect.x &&
+    px <= goalRect.x + goalRect.size &&
+    py >= goalRect.y &&
+    py <= goalRect.y + goalRect.size
+  );
 }
 
 function finishLevel() {
@@ -902,11 +941,9 @@ function drawRoom() {
   ctx.strokeRect(0, 0, WIDTH, HEIGHT);
 
   if (currentRoomId === goalRoomId) {
-    const size = 38;
-    const gx = WIDTH / 2 - size / 2;
-    const gy = HEIGHT / 2 - size / 2;
+    const goalRect = getGoalRect(room);
     ctx.fillStyle = "#22c55e";
-    ctx.fillRect(gx, gy, size, size);
+    ctx.fillRect(goalRect.x, goalRect.y, goalRect.size, goalRect.size);
   }
 
   for (const enemy of room.enemies) {
