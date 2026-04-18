@@ -19,6 +19,7 @@ const GRID_ROWS = 16;
 const TILE_SIZE = WIDTH / GRID_COLS;
 const CHEST_SIZE = Math.floor(TILE_SIZE * 0.7);
 const ROOM_CHARS = new Set(["X", "D", "*", "E", "G", "C"]);
+const PLAYER_BASE_HEALTH = 5;
 
 const DEFAULT_ROOM_TYPES = [
   {
@@ -61,7 +62,15 @@ const DEFAULT_ROOM_TYPES = [
 
 const keys = new Set();
 const mouse = { x: WIDTH / 2, y: HEIGHT / 2 };
-const chestItems = [{ name: "Health-Up", apply: () => { player.health += 1; } }];
+const chestItems = [
+  {
+    name: "Health-Up",
+    apply: () => {
+      player.maxHealth += 1;
+      player.health = Math.min(player.health + 1, player.maxHealth);
+    },
+  },
+];
 
 let level = 1;
 let roomCount = ROOM_COUNT_START;
@@ -72,11 +81,14 @@ let currentRoomId = 0;
 let goalRoomId = 0;
 let discoveredRoomIds = new Set();
 let roomTypes = [...DEFAULT_ROOM_TYPES];
+let hasDungeonMap = false;
+let hasDungeonCompass = false;
 
 const player = {
   x: WIDTH / 2,
   y: HEIGHT / 2,
-  health: 5,
+  health: PLAYER_BASE_HEALTH,
+  maxHealth: PLAYER_BASE_HEALTH,
   radius: PLAYER_RADIUS,
 };
 
@@ -498,6 +510,28 @@ function collectChestSpawnPoints(room) {
   return points;
 }
 
+function createMapChestItem() {
+  return {
+    name: "Map",
+    apply: () => {
+      hasDungeonMap = true;
+    },
+  };
+}
+
+function createCompassChestItem() {
+  return {
+    name: "Compass",
+    apply: () => {
+      hasDungeonCompass = true;
+    },
+  };
+}
+
+function roomHasUnopenedChest(room) {
+  return room.chests.some((chest) => !chest.collected);
+}
+
 function getGoalMarkerPosition(room) {
   const layout = getRoomLayout(room);
   const markers = [];
@@ -629,6 +663,7 @@ function generateDungeon(roomCountTarget) {
   const startRoom = byCoord.get(coordKey(0, 0));
   const nonStartRooms = generatedRooms.filter((room) => room.id !== startRoom.id);
   const goalRoom = nonStartRooms[randomInt(0, nonStartRooms.length - 1)];
+  const chestCandidates = [];
 
   for (const room of generatedRooms) {
     const roomType = pickRoomType();
@@ -645,14 +680,25 @@ function generateDungeon(roomCountTarget) {
       .filter(() => Math.random() < CHEST_SPAWN_CHANCE)
       .map((spawn) => {
         const item = chestItems[randomInt(0, chestItems.length - 1)];
-        return {
+        const chest = {
           x: spawn.x,
           y: spawn.y,
           size: CHEST_SIZE,
           item,
           collected: false,
         };
+        chestCandidates.push({ room, spawn, chest });
+        return chest;
       });
+
+    for (const spawn of chestSpawns) {
+      const existingChest = room.chests.find((chest) => chest.x === spawn.x && chest.y === spawn.y);
+      if (existingChest) {
+        continue;
+      }
+
+      chestCandidates.push({ room, spawn, chest: null });
+    }
 
     if (room.id === startRoom.id) {
       continue;
@@ -675,6 +721,32 @@ function generateDungeon(roomCountTarget) {
     }
   }
 
+  const availableChestSlots = shuffle([...chestCandidates]);
+  const assignSpecialChest = (itemFactory) => {
+    const slot = availableChestSlots.shift();
+    if (!slot) {
+      return;
+    }
+
+    if (!slot.chest) {
+      const chest = {
+        x: slot.spawn.x,
+        y: slot.spawn.y,
+        size: CHEST_SIZE,
+        item: itemFactory(),
+        collected: false,
+      };
+      slot.room.chests.push(chest);
+      slot.chest = chest;
+      return;
+    }
+
+    slot.chest.item = itemFactory();
+  };
+
+  assignSpecialChest(createMapChestItem);
+  assignSpecialChest(createCompassChestItem);
+
   return {
     generatedRooms,
     startRoomId: startRoom.id,
@@ -689,6 +761,8 @@ function loadLevel() {
   currentRoomId = generated.startRoomId;
   goalRoomId = generated.goalRoomId;
   discoveredRoomIds = new Set([currentRoomId]);
+  hasDungeonMap = false;
+  hasDungeonCompass = false;
 
   const startRoom = roomById.get(currentRoomId);
   const startPos = randomOpenPositionInRoom(startRoom, player.radius);
@@ -701,7 +775,8 @@ function loadLevel() {
 function resetRun() {
   level = 1;
   roomCount = ROOM_COUNT_START;
-  player.health = 5;
+  player.maxHealth = PLAYER_BASE_HEALTH;
+  player.health = PLAYER_BASE_HEALTH;
   gameOver = false;
   loadLevel();
 }
@@ -1118,21 +1193,29 @@ function drawRoom() {
 }
 
 function drawHud() {
-  const room = roomById.get(currentRoomId);
+  const healthRatio = Math.max(0, Math.min(1, player.health / player.maxHealth));
+  const healthBarX = 16;
+  const healthBarY = 20;
+  const healthBarW = 190;
+  const healthBarH = 14;
 
   ctx.fillStyle = "#dce3ef";
   ctx.font = "bold 20px Trebuchet MS";
-  ctx.fillText(`Health: ${player.health}`, 16, 30);
-  ctx.fillText(`Level: ${level}`, 16, 56);
-  ctx.fillText(`Room: ${currentRoomId + 1}/${rooms.length}`, 16, 82);
-  if (room && room.roomTypeName) {
-    ctx.fillText(`Type: ${room.roomTypeName}`, 16, 108);
-  }
+  ctx.fillText("Health", healthBarX, healthBarY - 4);
 
-  ctx.textAlign = "right";
-  ctx.fillStyle = "#9db0c9";
-  ctx.fillText("W A S D to move   |   Left click to shoot   |   E to open chest", WIDTH - 16, 30);
-  ctx.textAlign = "left";
+  ctx.fillStyle = "rgb(10 14 22 / 82%)";
+  ctx.fillRect(healthBarX, healthBarY, healthBarW, healthBarH);
+
+  ctx.fillStyle = "#ef4444";
+  ctx.fillRect(healthBarX, healthBarY, Math.floor(healthBarW * healthRatio), healthBarH);
+
+  ctx.strokeStyle = "#6b7280";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(healthBarX, healthBarY, healthBarW, healthBarH);
+
+  ctx.fillStyle = "#dce3ef";
+  ctx.font = "bold 14px Trebuchet MS";
+  ctx.fillText(`${player.health}/${player.maxHealth}`, healthBarX + healthBarW + 10, healthBarY + healthBarH - 1);
 
   if (levelMessageTimer > 0) {
     ctx.fillStyle = "#22c55e";
@@ -1181,8 +1264,18 @@ function drawMinimap() {
     return;
   }
 
-  const discoveredRooms = rooms.filter((room) => discoveredRoomIds.has(room.id));
-  if (discoveredRooms.length === 0) {
+  const visibleRooms = rooms.filter((room) => {
+    if (hasDungeonMap) {
+      return true;
+    }
+
+    if (discoveredRoomIds.has(room.id)) {
+      return true;
+    }
+
+    return hasDungeonCompass && roomHasUnopenedChest(room);
+  });
+  if (visibleRooms.length === 0) {
     return;
   }
 
@@ -1191,7 +1284,7 @@ function drawMinimap() {
   let minY = Infinity;
   let maxY = -Infinity;
 
-  for (const room of discoveredRooms) {
+  for (const room of visibleRooms) {
     minX = Math.min(minX, room.x);
     maxX = Math.max(maxX, room.x);
     minY = Math.min(minY, room.y);
@@ -1199,9 +1292,9 @@ function drawMinimap() {
   }
 
   const panelW = 220;
-  const panelH = 170;
+  const panelH = 186;
   const panelX = WIDTH - panelW - 16;
-  const panelY = 46;
+  const panelY = 16;
 
   ctx.fillStyle = "rgb(11 16 26 / 78%)";
   ctx.fillRect(panelX, panelY, panelW, panelH);
@@ -1213,13 +1306,16 @@ function drawMinimap() {
   ctx.fillStyle = "#d5deeb";
   ctx.font = "bold 14px Trebuchet MS";
   ctx.textAlign = "left";
-  ctx.fillText("Minimap (discovered)", panelX + 10, labelY);
+  ctx.fillText("Minimap", panelX + 10, labelY);
+  ctx.fillStyle = "#9db0c9";
+  ctx.font = "12px Trebuchet MS";
+  ctx.fillText(`Level: ${level}`, panelX + 10, labelY + 16);
 
   const mapPadding = 14;
-  const mapTop = panelY + 30;
+  const mapTop = panelY + 46;
   const mapLeft = panelX + mapPadding;
   const mapW = panelW - mapPadding * 2;
-  const mapH = panelH - 42;
+  const mapH = panelH - 58;
 
   const spanX = maxX - minX + 1;
   const spanY = maxY - minY + 1;
@@ -1234,13 +1330,15 @@ function drawMinimap() {
     y: offsetY + (room.y - minY) * tile + tile / 2,
   });
 
+  const visibleRoomIds = new Set(visibleRooms.map((room) => room.id));
+
   ctx.strokeStyle = "#577095";
   ctx.lineWidth = 2;
-  for (const room of discoveredRooms) {
+  for (const room of visibleRooms) {
     const source = centerOf(room);
     for (const side of ["n", "e", "s", "w"]) {
       const neighborId = room.neighbors[side];
-      if (neighborId === null || !discoveredRoomIds.has(neighborId) || neighborId < room.id) {
+      if (neighborId === null || !visibleRoomIds.has(neighborId) || neighborId < room.id) {
         continue;
       }
       const target = centerOf(roomById.get(neighborId));
@@ -1251,12 +1349,15 @@ function drawMinimap() {
     }
   }
 
-  for (const room of discoveredRooms) {
+  for (const room of visibleRooms) {
     const rx = offsetX + (room.x - minX) * tile + 2;
     const ry = offsetY + (room.y - minY) * tile + 2;
     const size = tile - 4;
 
     let color = "#7f90ab";
+    if (hasDungeonCompass && roomHasUnopenedChest(room)) {
+      color = "#2563eb";
+    }
     if (room.id === goalRoomId) {
       color = "#2ec27e";
     }
