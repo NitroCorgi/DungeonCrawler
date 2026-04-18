@@ -10,11 +10,15 @@ const PLAYER_SPEED = 260;
 const PLAYER_RADIUS = 14;
 const PLAYER_PROJECTILE_SPEED = 520;
 const ENEMY_PROJECTILE_SPEED = 280;
+const CHEST_SPAWN_CHANCE = 0.1;
+const CHEST_INTERACT_RANGE = 12;
+const PICKUP_SPLASH_DURATION = 1.8;
 const ROOM_TYPE_MANIFEST = "rooms/manifest.txt";
 const GRID_COLS = 24;
 const GRID_ROWS = 16;
 const TILE_SIZE = WIDTH / GRID_COLS;
-const ROOM_CHARS = new Set(["X", "D", "*", "E", "G"]);
+const CHEST_SIZE = Math.floor(TILE_SIZE * 0.7);
+const ROOM_CHARS = new Set(["X", "D", "*", "E", "G", "C"]);
 
 const DEFAULT_ROOM_TYPES = [
   {
@@ -57,6 +61,7 @@ const DEFAULT_ROOM_TYPES = [
 
 const keys = new Set();
 const mouse = { x: WIDTH / 2, y: HEIGHT / 2 };
+const chestItems = [{ name: "Health-Up", apply: () => { player.health += 1; } }];
 
 let level = 1;
 let roomCount = ROOM_COUNT_START;
@@ -78,11 +83,18 @@ const player = {
 let projectiles = [];
 let levelMessageTimer = 0;
 let gameOver = false;
+let interactQueued = false;
+let pickupSplashText = "";
+let pickupSplashTimer = 0;
 
 window.addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
   if (["w", "a", "s", "d"].includes(key)) {
     keys.add(key);
+  }
+
+  if (key === "e" && !event.repeat) {
+    interactQueued = true;
   }
 
   if (gameOver && key === "r") {
@@ -328,6 +340,30 @@ function isBlockingCell(room, col, row) {
   return false;
 }
 
+function getChestRect(chest) {
+  return {
+    x: chest.x - chest.size / 2,
+    y: chest.y - chest.size / 2,
+    width: chest.size,
+    height: chest.size,
+  };
+}
+
+function circleHitsChest(room, x, y, radius) {
+  if (!room.chests || room.chests.length === 0) {
+    return false;
+  }
+
+  return room.chests.some((chest) => {
+    if (chest.collected) {
+      return false;
+    }
+
+    const rect = getChestRect(chest);
+    return circleIntersectsRect(x, y, radius, rect.x, rect.y, rect.width, rect.height);
+  });
+}
+
 function circleIntersectsRect(cx, cy, cr, rx, ry, rw, rh) {
   const nearestX = Math.max(rx, Math.min(cx, rx + rw));
   const nearestY = Math.max(ry, Math.min(cy, ry + rh));
@@ -359,14 +395,18 @@ function circleHitsLayout(room, x, y, radius) {
   return false;
 }
 
+function circleHitsRoomObstacles(room, x, y, radius) {
+  return circleHitsLayout(room, x, y, radius) || circleHitsChest(room, x, y, radius);
+}
+
 function moveWithLayoutCollision(entity, dx, dy, room) {
   entity.x += dx;
-  if (circleHitsLayout(room, entity.x, entity.y, entity.radius)) {
+  if (circleHitsRoomObstacles(room, entity.x, entity.y, entity.radius)) {
     entity.x -= dx;
   }
 
   entity.y += dy;
-  if (circleHitsLayout(room, entity.x, entity.y, entity.radius)) {
+  if (circleHitsRoomObstacles(room, entity.x, entity.y, entity.radius)) {
     entity.y -= dy;
   }
 }
@@ -425,6 +465,26 @@ function collectEnemySpawnPoints(room) {
   for (let row = 0; row < GRID_ROWS; row += 1) {
     for (let col = 0; col < GRID_COLS; col += 1) {
       if (layout[row][col] !== "E") {
+        continue;
+      }
+
+      points.push({
+        x: col * TILE_SIZE + TILE_SIZE / 2,
+        y: row * TILE_SIZE + TILE_SIZE / 2,
+      });
+    }
+  }
+
+  return points;
+}
+
+function collectChestSpawnPoints(room) {
+  const points = [];
+  const layout = getRoomLayout(room);
+
+  for (let row = 0; row < GRID_ROWS; row += 1) {
+    for (let col = 0; col < GRID_COLS; col += 1) {
+      if (layout[row][col] !== "C") {
         continue;
       }
 
@@ -507,7 +567,7 @@ function randomOpenPositionInRoom(room, radius) {
   for (let attempt = 0; attempt < 80; attempt += 1) {
     const x = randomInt(radius + 1, WIDTH - radius - 1);
     const y = randomInt(radius + 1, HEIGHT - radius - 1);
-    if (!circleHitsLayout(room, x, y, radius)) {
+    if (!circleHitsRoomObstacles(room, x, y, radius)) {
       return { x, y };
     }
   }
@@ -549,6 +609,7 @@ function generateDungeon(roomCountTarget) {
     y: pos.y,
     neighbors: { n: null, e: null, s: null, w: null },
     enemies: [],
+    chests: [],
   }));
 
   const byCoord = new Map();
@@ -578,6 +639,20 @@ function generateDungeon(roomCountTarget) {
     }
     ensureRequiredDoors(room);
     room.goalPosition = getGoalMarkerPosition(room);
+
+    const chestSpawns = collectChestSpawnPoints(room);
+    room.chests = chestSpawns
+      .filter(() => Math.random() < CHEST_SPAWN_CHANCE)
+      .map((spawn) => {
+        const item = chestItems[randomInt(0, chestItems.length - 1)];
+        return {
+          x: spawn.x,
+          y: spawn.y,
+          size: CHEST_SIZE,
+          item,
+          collected: false,
+        };
+      });
 
     if (room.id === startRoom.id) {
       continue;
@@ -671,6 +746,11 @@ function shootFromEnemy(enemy) {
   });
 }
 
+function showPickupSplash(itemName) {
+  pickupSplashText = `got ${itemName}!`;
+  pickupSplashTimer = PICKUP_SPLASH_DURATION;
+}
+
 function circleHit(a, b) {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
@@ -761,6 +841,49 @@ function tryRoomTransition() {
   }
 }
 
+function getNearbyChest(room) {
+  if (!room.chests) {
+    return null;
+  }
+
+  return (
+    room.chests.find((chest) => {
+      if (chest.collected) {
+        return false;
+      }
+
+      const rect = getChestRect(chest);
+      return circleIntersectsRect(
+        player.x,
+        player.y,
+        player.radius + CHEST_INTERACT_RANGE,
+        rect.x,
+        rect.y,
+        rect.width,
+        rect.height
+      );
+    }) || null
+  );
+}
+
+function handleChestInteraction() {
+  if (!interactQueued) {
+    return;
+  }
+
+  interactQueued = false;
+  const room = roomById.get(currentRoomId);
+  const chest = getNearbyChest(room);
+
+  if (!chest) {
+    return;
+  }
+
+  chest.item.apply();
+  chest.collected = true;
+  showPickupSplash(chest.item.name);
+}
+
 function updatePlayer(dt) {
   const room = roomById.get(currentRoomId);
   let mx = 0;
@@ -786,6 +909,7 @@ function updatePlayer(dt) {
   }
 
   tryRoomTransition();
+  handleChestInteraction();
 }
 
 function updateEnemies(dt) {
@@ -835,7 +959,7 @@ function updateProjectiles(dt) {
       continue;
     }
 
-    if (circleHitsLayout(currentRoom, projectile.x, projectile.y, projectile.radius)) {
+    if (circleHitsRoomObstacles(currentRoom, projectile.x, projectile.y, projectile.radius)) {
       projectile.alive = false;
       continue;
     }
@@ -888,6 +1012,10 @@ function finishLevel() {
 function update(dt) {
   if (levelMessageTimer > 0) {
     levelMessageTimer -= dt;
+  }
+
+  if (pickupSplashTimer > 0) {
+    pickupSplashTimer -= dt;
   }
 
   if (gameOver) {
@@ -946,6 +1074,18 @@ function drawRoom() {
     ctx.fillRect(goalRect.x, goalRect.y, goalRect.size, goalRect.size);
   }
 
+  for (const chest of room.chests) {
+    if (chest.collected) {
+      continue;
+    }
+
+    const rect = getChestRect(chest);
+    ctx.fillStyle = "#2563eb";
+    ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+    ctx.fillStyle = "#93c5fd";
+    ctx.fillRect(rect.x + 5, rect.y + 5, rect.width - 10, rect.height - 10);
+  }
+
   for (const enemy of room.enemies) {
     ctx.beginPath();
     ctx.fillStyle = "#ef4444";
@@ -991,7 +1131,7 @@ function drawHud() {
 
   ctx.textAlign = "right";
   ctx.fillStyle = "#9db0c9";
-  ctx.fillText("W A S D to move   |   Left click to shoot", WIDTH - 16, 30);
+  ctx.fillText("W A S D to move   |   Left click to shoot   |   E to open chest", WIDTH - 16, 30);
   ctx.textAlign = "left";
 
   if (levelMessageTimer > 0) {
@@ -1007,6 +1147,14 @@ function drawHud() {
     ctx.font = "bold 20px Trebuchet MS";
     ctx.textAlign = "center";
     ctx.fillText("Step on the green square to finish the level", WIDTH / 2, HEIGHT - 20);
+    ctx.textAlign = "left";
+  }
+
+  if (pickupSplashTimer > 0 && pickupSplashText) {
+    ctx.fillStyle = "#dbeafe";
+    ctx.font = "bold 34px Trebuchet MS";
+    ctx.textAlign = "center";
+    ctx.fillText(pickupSplashText, WIDTH / 2, HEIGHT * 0.24);
     ctx.textAlign = "left";
   }
 

@@ -6,6 +6,14 @@
         "/^node --check game\\.js$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^@'\nconst fs = require\\(\"fs\"\\);\nfor \\(const file of \\[\"rooms/skirmish\\.txt\", \"rooms/swarm\\.txt\", \"rooms/tanks\\.txt\"\\]\\) \\{\n  const text = fs\\.readFileSync\\(file, \"utf8\"\\);\n  const layout = text\\.split\\(/layout:\\\\r\\?\\\\n/i\\)\\[1\\]\\?\\.split\\(/\\\\r\\?\\\\nendlayout/i\\)\\[0\\] \\?\\? \"\";\n  const count = layout\\.split\\(\"C\"\\)\\.length - 1;\n  console\\.log\\(`\\$\\{file\\}: layout C count = \\$\\{count\\}`\\);\n  console\\.log\\(layout\\.split\\(/\\\\r\\?\\\\n/\\)\\.filter\\(Boolean\\)\\.join\\(\"\\\\n\"\\)\\);\n  console\\.log\\(\"---\"\\);\n\\}\n'@ \\| node$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^@'\nconst fs = require\\(\"fs\"\\);\nconst path = require\\(\"path\"\\);\n\nglobal\\.window = \\{ addEventListener\\(\\) \\{\\} \\};\nconst ctx = new Proxy\\(\\{\\}, \\{ get: \\(\\) => \\(\\) => \\{\\} \\}\\);\nconst canvas = \\{\n  width: 1200,\n  height: 800,\n  getContext\\(\\) \\{ return ctx; \\},\n  addEventListener\\(\\) \\{\\},\n  getBoundingClientRect\\(\\) \\{ return \\{ left: 0, top: 0, width: 1200, height: 800 \\}; \\}\n\\};\nglobal\\.document = \\{ getElementById\\(\\) \\{ return canvas; \\} \\};\nglobal\\.performance = \\{ now: \\(\\) => 0 \\};\nglobal\\.requestAnimationFrame = \\(\\) => \\{\\};\nglobal\\.fetch = async \\(resource\\) => \\(\\{\n  ok: true,\n  async text\\(\\) \\{\n    return fs\\.readFileSync\\(path\\.join\\(process\\.cwd\\(\\), resource\\), \"utf8\"\\);\n  \\}\n\\}\\);\n\neval\\(\n  fs\\.readFileSync\\(\"game\\.js\", \"utf8\"\\) \\+\n    \"\\\\nsetTimeout\\(\\(\\) => \\{\\\\n\" \\+\n    \"  console\\.log\\(JSON\\.stringify\\(\\{ roomTypes: roomTypes\\.map\\(\\(roomType\\) => \\(\\{ name: roomType\\.name, cCount: roomType\\.layout\\.join\\(''\\)\\.split\\('C'\\)\\.length - 1 \\}\\)\\), rooms: rooms\\.map\\(\\(room\\) => \\(\\{ id: room\\.id, type: room\\.roomTypeName, chests: room\\.chests\\.length \\}\\)\\) \\}, null, 2\\)\\);\\\\n\" \\+\n    \"\\}, 0\\);\"\n\\);\n'@ \\| node$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }

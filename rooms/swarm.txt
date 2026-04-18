@@ -10,7 +10,7 @@ shootCooldownMin=0.6
 shootCooldownMax=1.6
 layout:
 XXXXXXXXXXXDDDXXXXXXXXXX
-X**********************X
+X*********************CX
 X*E****E*********E****EX
 X******XXXX**XXXX******X
 X**********************X
@@ -22,7 +22,7 @@ D***XXXX********XXXX***D
 X**********************X
 X******XXXX**XXXX******X
 X**********************X
-X*E****E*********E****EX
+X*E****E****C****E****EX
 X**********************X
 XXXXXXXXXXXDDDXXXXXXXXXX
 endlayout
