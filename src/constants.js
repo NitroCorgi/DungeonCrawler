@@ -10,10 +10,15 @@ export const PLAYER_BASE_HEALTH = 5;
 // Player
 export const PLAYER_SPEED = 260;
 export const PLAYER_RADIUS = 14;
-export const PLAYER_PROJECTILE_SPEED = 520;
+export const PLAYER_PROJECTILE_SPEED = 1040;
+export const PLAYER_MAGAZINE_SIZE = 7;
+export const PLAYER_START_RESERVE_AMMO = 14;
+export const PLAYER_AMMO_PICKUP_AMOUNT = 14;
+export const PLAYER_RELOAD_TIME_SECONDS = 2;
+export const PLAYER_SHOT_INACCURACY_DEGREES = 4;
 
 // Enemies
-export const ENEMY_PROJECTILE_SPEED = 280;
+export const ENEMY_PROJECTILE_SPEED = 560;
 
 // Chest
 export const CHEST_SPAWN_CHANCE = 0.1;

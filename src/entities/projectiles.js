@@ -2,7 +2,13 @@
  * Projectile entity and system
  */
 
-import { PLAYER_PROJECTILE_SPEED, ENEMY_PROJECTILE_SPEED, WIDTH, HEIGHT } from "../constants.js";
+import {
+  PLAYER_PROJECTILE_SPEED,
+  ENEMY_PROJECTILE_SPEED,
+  WIDTH,
+  HEIGHT,
+  PLAYER_SHOT_INACCURACY_DEGREES,
+} from "../constants.js";
 import { circleHit } from "../utils.js";
 import { circleHitsRoomObstacles } from "../systems/physics.js";
 
@@ -17,11 +23,16 @@ export function shootFromPlayer(player, targetX, targetY, currentRoomId) {
     return null;
   }
 
+  const baseAngle = Math.atan2(dy, dx);
+  const spreadRadians = (PLAYER_SHOT_INACCURACY_DEGREES * Math.PI) / 180;
+  const inaccuracyOffset = (Math.random() * 2 - 1) * spreadRadians;
+  const shotAngle = baseAngle + inaccuracyOffset;
+
   return {
     x: player.x,
     y: player.y,
-    vx: (dx / length) * PLAYER_PROJECTILE_SPEED,
-    vy: (dy / length) * PLAYER_PROJECTILE_SPEED,
+    vx: Math.cos(shotAngle) * PLAYER_PROJECTILE_SPEED,
+    vy: Math.sin(shotAngle) * PLAYER_PROJECTILE_SPEED,
     radius: 4,
     owner: "player",
     roomId: currentRoomId,

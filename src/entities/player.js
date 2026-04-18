@@ -2,7 +2,15 @@
  * Player entity and logic
  */
 
-import { WIDTH, HEIGHT, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_BASE_HEALTH } from "../constants.js";
+import {
+  WIDTH,
+  HEIGHT,
+  PLAYER_SPEED,
+  PLAYER_RADIUS,
+  PLAYER_BASE_HEALTH,
+  PLAYER_MAGAZINE_SIZE,
+  PLAYER_START_RESERVE_AMMO,
+} from "../constants.js";
 import { moveWithLayoutCollision } from "../systems/physics.js";
 import { keys } from "../systems/input.js";
 
@@ -16,6 +24,10 @@ export function createPlayer() {
     health: PLAYER_BASE_HEALTH,
     maxHealth: PLAYER_BASE_HEALTH,
     radius: PLAYER_RADIUS,
+    ammoInMagazine: PLAYER_MAGAZINE_SIZE,
+    reserveAmmo: PLAYER_START_RESERVE_AMMO,
+    isReloading: false,
+    reloadTimer: 0,
   };
 }
 
@@ -25,6 +37,10 @@ export function createPlayer() {
 export function resetPlayer(player) {
   player.maxHealth = PLAYER_BASE_HEALTH;
   player.health = PLAYER_BASE_HEALTH;
+  player.ammoInMagazine = PLAYER_MAGAZINE_SIZE;
+  player.reserveAmmo = PLAYER_START_RESERVE_AMMO;
+  player.isReloading = false;
+  player.reloadTimer = 0;
 }
 
 /**

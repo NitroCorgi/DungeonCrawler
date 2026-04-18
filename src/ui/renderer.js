@@ -178,6 +178,19 @@ export function drawHud(ctx, player, level, currentRoomId, goalRoomId, gameOver,
   ctx.font = "bold 14px Trebuchet MS";
   ctx.fillText(`${player.health}/${player.maxHealth}`, healthBarX + healthBarW + 10, healthBarY + healthBarH - 1);
 
+  // Ammo
+  ctx.fillStyle = "#dce3ef";
+  ctx.font = "bold 20px Trebuchet MS";
+  ctx.fillText("Ammo", healthBarX, healthBarY + 52);
+  ctx.font = "bold 16px Trebuchet MS";
+  ctx.fillText(`${player.ammoInMagazine}/${player.reserveAmmo}`, healthBarX, healthBarY + 74);
+
+  if (player.isReloading) {
+    ctx.fillStyle = "#fbbf24";
+    ctx.font = "bold 13px Trebuchet MS";
+    ctx.fillText(`Reloading ${player.reloadTimer.toFixed(1)}s`, healthBarX + 108, healthBarY + 74);
+  }
+
   // Level message
   if (levelMessageTimer > 0) {
     ctx.fillStyle = "#22c55e";

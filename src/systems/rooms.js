@@ -2,7 +2,16 @@
  * Room and entity management system
  */
 
-import { TILE_SIZE, GRID_COLS, GRID_ROWS, CHEST_SIZE, CHEST_SPAWN_CHANCE, WIDTH, HEIGHT } from "../constants.js";
+import {
+  TILE_SIZE,
+  GRID_COLS,
+  GRID_ROWS,
+  CHEST_SIZE,
+  CHEST_SPAWN_CHANCE,
+  WIDTH,
+  HEIGHT,
+  PLAYER_AMMO_PICKUP_AMOUNT,
+} from "../constants.js";
 import { randomInt, shuffle, randomFloat } from "../utils.js";
 import { getRoomLayout, ensureRequiredDoors, cloneLayout, clearSpawnMarkers } from "./layout.js";
 
@@ -12,6 +21,12 @@ const chestItems = [
     apply: (player) => {
       player.maxHealth += 1;
       player.health = Math.min(player.health + 1, player.maxHealth);
+    },
+  },
+  {
+    name: "Pistol Ammo",
+    apply: (player) => {
+      player.reserveAmmo = (player.reserveAmmo || 0) + PLAYER_AMMO_PICKUP_AMOUNT;
     },
   },
 ];

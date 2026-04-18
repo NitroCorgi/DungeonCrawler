@@ -2,7 +2,17 @@
  * Main game manager - orchestrates all systems
  */
 
-import { WIDTH, HEIGHT, ROOM_COUNT_START, PLAYER_BASE_HEALTH, TILE_SIZE, GRID_COLS, GRID_ROWS } from "./constants.js";
+import {
+  WIDTH,
+  HEIGHT,
+  ROOM_COUNT_START,
+  PLAYER_BASE_HEALTH,
+  TILE_SIZE,
+  GRID_COLS,
+  GRID_ROWS,
+  PLAYER_MAGAZINE_SIZE,
+  PLAYER_RELOAD_TIME_SECONDS,
+} from "./constants.js";
 import { createPlayer, resetPlayer, setPlayerPosition, updatePlayerMovement, damagePlayer } from "./entities/player.js";
 import { shootFromPlayer } from "./entities/projectiles.js";
 import { updateEnemies, cleanupDeadEnemies } from "./entities/enemies.js";
@@ -62,7 +72,11 @@ export class GameManager {
    * Setup input handlers
    */
   setupInputHandlers() {
-    setupKeyboardListeners(this.gameOver, () => this.resetRun());
+    setupKeyboardListeners(
+      () => this.gameOver,
+      () => this.resetRun(),
+      () => this.reloadPlayerWeapon()
+    );
 
     const canvas = this.canvas;
     setupMouseListeners(canvas, WIDTH, HEIGHT, (x, y) => this.shootFromPlayer(x, y));
@@ -172,10 +186,60 @@ export class GameManager {
    * Shoot projectile from player
    */
   shootFromPlayer(targetX, targetY) {
+    if (this.gameOver || this.player.isReloading || this.player.ammoInMagazine <= 0) {
+      return;
+    }
+
     const projectile = shootFromPlayer(this.player, targetX, targetY, this.currentRoomId);
     if (projectile) {
       this.projectiles.push(projectile);
+      this.player.ammoInMagazine -= 1;
     }
+  }
+
+  /**
+   * Start player reload if weapon is not full and reserve ammo exists
+   */
+  reloadPlayerWeapon() {
+    if (this.gameOver) {
+      return;
+    }
+
+    if (this.player.isReloading) {
+      return;
+    }
+
+    if (this.player.ammoInMagazine >= PLAYER_MAGAZINE_SIZE) {
+      return;
+    }
+
+    if (this.player.reserveAmmo <= 0) {
+      return;
+    }
+
+    this.player.isReloading = true;
+    this.player.reloadTimer = PLAYER_RELOAD_TIME_SECONDS;
+  }
+
+  /**
+   * Advance reload state and transfer bullets when timer completes
+   */
+  updateReload(dt) {
+    if (!this.player.isReloading) {
+      return;
+    }
+
+    this.player.reloadTimer = Math.max(0, this.player.reloadTimer - dt);
+    if (this.player.reloadTimer > 0) {
+      return;
+    }
+
+    const missingBullets = PLAYER_MAGAZINE_SIZE - this.player.ammoInMagazine;
+    const bulletsToLoad = Math.min(missingBullets, this.player.reserveAmmo);
+    this.player.ammoInMagazine += bulletsToLoad;
+    this.player.reserveAmmo -= bulletsToLoad;
+    this.player.isReloading = false;
+    this.player.reloadTimer = 0;
   }
 
   /**
@@ -264,6 +328,8 @@ export class GameManager {
     if (this.gameOver) {
       return;
     }
+
+    this.updateReload(dt);
 
     const currentRoom = this.roomById.get(this.currentRoomId);
 

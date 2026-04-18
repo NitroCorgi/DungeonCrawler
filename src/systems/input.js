@@ -10,7 +10,7 @@ let interactQueued = false;
 /**
  * Setup keyboard event listeners
  */
-export function setupKeyboardListeners(onGameOver, onResetRun) {
+export function setupKeyboardListeners(isGameOver, onResetRun, onReload) {
   window.addEventListener("keydown", (event) => {
     const key = event.key.toLowerCase();
     if (["w", "a", "s", "d"].includes(key)) {
@@ -21,8 +21,13 @@ export function setupKeyboardListeners(onGameOver, onResetRun) {
       interactQueued = true;
     }
 
-    if (key === "r" && onGameOver) {
-      onResetRun();
+    if (key === "r" && !event.repeat) {
+      if (isGameOver()) {
+        onResetRun();
+        return;
+      }
+
+      onReload();
     }
   });
 
